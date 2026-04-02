@@ -14,8 +14,7 @@ import base64
 # ─────────────────────────────────────────────
 #  CONFIG
 # ─────────────────────────────────────────────
-API_URL = "http://localhost:8000"
-
+API_URL = "https://shree3010-medicore-ai-api.hf.space"
 st.set_page_config(
     page_title="MediCore AI",
     page_icon="🏥",
