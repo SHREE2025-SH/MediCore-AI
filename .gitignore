@@ -1,0 +1,10 @@
+cnn/chest_xray/
+cnn/brain/
+cnn/eye/
+cnn/skin/
+__pycache__/
+*.zip
+*.tar.gz
+dia_3.csv
+.env
+*.pth
