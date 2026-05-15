@@ -11,7 +11,7 @@ import numpy as np
 from pathlib import Path
 from PIL import Image
 from torchvision import transforms, models
-from groq import Groq
+from google import genai
 from dotenv import load_dotenv
 import os
 
@@ -190,33 +190,33 @@ class DQNTriage:
         priority = self.PRIORITY_MAP.get(action, 2)
 
         return {
-            "model":           "dqn_triage",
+            "model":            "dqn_triage",
             "matched_symptoms": matched,
-            "action":          action,
-            "priority":        priority,
-            "priority_label":  f"Priority {priority}",
-            "emergency":       priority == 1,
+            "action":           action,
+            "priority":         priority,
+            "priority_label":   f"Priority {priority}",
+            "emergency":        priority == 1,
         }
 
 
 # ─────────────────────────────────────────────
-#  GROQ LLM REPORT
+#  GEMMA 4 LLM REPORT
 # ─────────────────────────────────────────────
-class GroqReporter:
+class GroqReporter:  # keeping same class name so rest of code doesn't break
     def __init__(self):
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            print("  ⚠️  GROQ_API_KEY not found in .env")
+            print("  ⚠️  GEMINI_API_KEY not found in .env")
             self.client = None
         else:
-            self.client = Groq(api_key=api_key)
-            print("  ✅ Groq LLM ready (llama-3.3-70b-versatile)")
+            self.client = genai.Client(api_key=api_key)
+            print("  ✅ Gemma 4 LLM ready (gemma-4-31b-it)")
 
     def generate_report(self, cnn_result: dict = None,
                         dqn_result: dict = None,
                         patient_info: dict = None) -> str:
         if self.client is None:
-            return "Groq API not configured. Add GROQ_API_KEY to .env"
+            return "Gemma 4 API not configured. Add GEMINI_API_KEY to .env"
 
         # Build context string
         context_parts = []
@@ -240,7 +240,7 @@ class GroqReporter:
 
         context = "\n".join(context_parts)
 
-        prompt = f"""You are MediCore AI, an advanced medical assistant. Based on the following AI analysis results, provide a clear, professional medical report for the attending physician.
+        prompt = f"""You are MediCore AI, an advanced medical assistant powered by Gemma 4. Based on the following AI analysis results, provide a clear, professional medical report for the attending physician.
 
 {context}
 
@@ -253,13 +253,14 @@ Please provide:
 Keep the report concise, professional, and actionable. Always remind that this is AI-assisted analysis and final diagnosis must be confirmed by a licensed physician.
 Do NOT use markdown formatting, asterisks, bold, or bullet points. Write in plain text only."""
 
-        response = self.client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=800,
-            temperature=0.3,
-        )
-        return response.choices[0].message.content
+        try:
+            response = self.client.models.generate_content(
+                model="gemma-4-31b-it",
+                contents=prompt
+            )
+            return response.text
+        except Exception as e:
+            return f"Report generation failed: {e}"
 
 
 # ─────────────────────────────────────────────
@@ -394,9 +395,9 @@ class MediCoreEngine:
 
     def available_models(self) -> dict:
         return {
-            "cnns":  list(self.cnns.keys()),
-            "dqn":   self.dqn.model is not None,
-            "groq":  self.reporter.client is not None,
+            "cnns":   list(self.cnns.keys()),
+            "dqn":    self.dqn.model is not None,
+            "gemma4": self.reporter.client is not None,
             "device": str(DEVICE),
         }
 
@@ -415,3 +416,11 @@ if __name__ == "__main__":
     print(f"  Priority: {result['dqn_result'].get('priority_label')}")
     print(f"  Emergency: {result['emergency']}")
     print(f"  Call 108: {result['call_108']}")
+
+    # Test Gemma 4 report generation
+    print("\n[Test] Gemma 4 report generation...")
+    report = engine.reporter.generate_report(
+        cnn_result={"model": "chest", "prediction": "PNEUMONIA", "confidence": 0.92, "all_scores": {}},
+        patient_info={"age": 45, "gender": "Male"}
+    )
+    print(f"  Report: {report[:200]}...")
